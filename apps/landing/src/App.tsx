@@ -32,18 +32,21 @@ const TOOLS: Tool[] = [
       "Click-through, fully interactive lessons built on Warp — starting with eigenvectors. Read a little, watch the space move, then try it yourself in the sandbox. Summer of Math Exposition 2026 entry.",
   },
   {
+    name: "Flux",
+    subject: "Vector calculus",
+    status: "live",
+    // A subpath of this same Pages site, not its own domain — which is why Flux
+    // can ship without disturbing the one custom domain this repo publishes.
+    href: "/flux/",
+    description:
+      "Type two components and the plane fills with arrows — including the inverse-square, rotational and singular fields that defeat a naive plotter, with singularities marked rather than smeared. Drag a point through the field, trace a parameterized curve, and watch divergence and curl update as you type.",
+  },
+  {
     name: "Complex analysis",
     subject: "Future tool",
     status: "planned",
     description:
       "See holomorphic functions warp the complex plane: conformal maps that keep angles honest, Möbius transformations, domain coloring, and the derivative as a local rotate-and-stretch.",
-  },
-  {
-    name: "Vector calculus",
-    subject: "Future tool",
-    status: "planned",
-    description:
-      "Fields, flow, and flux in 3D: drag a path through a vector field and watch the line integral accumulate, probe divergence and curl where you point, see the big theorems instead of memorizing them.",
   },
 ];
 

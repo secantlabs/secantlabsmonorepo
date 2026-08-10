@@ -1,0 +1,553 @@
+/*
+ * Flux's look sits deliberately close to Warp's — same family, same light
+ * graph, same monospace numerics — because they are siblings under one brand.
+ * Colours are chosen for contrast first: every text/background pair here
+ * clears WCAG AA, and nothing encodes meaning in hue alone (PRD §8.4).
+ */
+
+:root {
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --ink: #1c2230;
+  --ink-soft: #5a6474;
+  --ink-faint: #8b94a3;
+  --line: #dfe3ea;
+  --line-soft: #eceff4;
+  --accent: #2b3f8f;
+  --accent-soft: #eaeefb;
+  --error: #b3261e;
+  --error-bg: #fdeceb;
+  --radius: 8px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+/* --- sidebar header ------------------------------------------------------- */
+
+/* Warp puts its chrome *inside* the sidebar, which leaves the graph
+   edge-to-edge — the single biggest reason it reads as a graphing tool rather
+   than an app with a graph in it. Flux follows. */
+
+.side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+
+.brand { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.brand-mark { display: flex; color: var(--accent); }
+.brand-name {
+  font-size: 18px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+
+.head-actions { display: flex; align-items: center; gap: 2px; }
+
+button {
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+/* Borderless icon buttons, as in Warp's header. */
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ink-soft);
+  border-radius: 7px;
+}
+.icon-btn:hover:not(:disabled) { background: var(--line-soft); color: var(--ink); }
+.icon-btn-active { background: var(--accent-soft); color: var(--accent); }
+.icon-btn:disabled { color: #cdd3dd; cursor: default; }
+
+/* A hairline between the history pair and the rest, as in Warp's header. */
+.head-div {
+  width: 1px;
+  height: 17px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+button:focus-visible,
+input:focus-visible,
+canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* --- the + menu ----------------------------------------------------------- */
+
+.add-wrap { position: relative; }
+
+.add-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 178px;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(20, 28, 44, 0.13);
+}
+
+.add-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: left;
+}
+.add-item:hover, .add-item:focus-visible { background: var(--line-soft); }
+
+.add-swatch {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  border-radius: 50%;
+}
+.add-label { font-size: 13px; }
+.add-hint {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+/* --- banner --------------------------------------------------------------- */
+
+.banner {
+  padding: 8px 16px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-soft);
+  flex: 0 0 auto;
+}
+
+/* --- layout -------------------------------------------------------------- */
+
+.body { display: flex; flex: 1 1 auto; min-height: 0; }
+
+.sidebar {
+  width: 356px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  min-height: 0;
+}
+
+.rows-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.field-canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  display: block;
+  background: #fff;
+  cursor: grab;
+  touch-action: none;
+}
+.field-canvas:active { cursor: grabbing; }
+
+/* Chrome that belongs to the tool rather than the graph floats over the canvas,
+   top-right, exactly as Warp's Feedback / Tutorial pills do. */
+.stage-actions {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 5;
+}
+
+.pill {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 15px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  box-shadow: 0 1px 3px rgba(20, 28, 44, 0.06);
+}
+.pill:hover { background: #fff; color: var(--ink); border-color: #cfd5df; }
+
+/* --- rows ---------------------------------------------------------------- */
+
+.row-list { list-style: none; margin: 0; padding: 0; }
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 8px 11px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.row:hover { background: #fcfcfe; }
+
+/* The numbered gutter gives every row a stable handle to refer to, which
+   matters most when someone is describing a scene to somebody else. */
+.row-num {
+  flex: 0 0 auto;
+  width: 22px;
+  padding-top: 3px;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: #b9c0cc;
+  user-select: none;
+}
+
+.row-body { flex: 1 1 auto; min-width: 0; }
+
+/* Never wraps. The expression cells share whatever width is left and shrink
+   together, so a narrow sidebar makes them narrower rather than breaking a
+   closing paren onto its own line. */
+.row-main {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* Variable names in math italic, as Warp sets them. */
+.row-name {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 0 1px;
+}
+.row-sep { color: var(--ink-faint); margin: 0 3px; }
+.paren {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 21px;
+  font-weight: 300;
+  color: #9aa3b2;
+  line-height: 1;
+}
+.comma { font-family: var(--mono); color: var(--ink-faint); margin: 0 1px; }
+.row-sub-name {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 11px;
+  color: var(--ink-faint);
+}
+
+.cell {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  flex: 1 1 0;
+  min-width: 40px;
+  max-width: 132px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  text-align: center;
+}
+.cell:hover { border-color: #c9cfd9; }
+/* Coordinates and slider values are short and shouldn't stretch. */
+.cell-num { flex: 0 0 62px; max-width: 62px; }
+
+/* Names, separators and parens never shrink — they're the row's skeleton. */
+.dot, .row-name, .row-sub-name, .row-sep, .paren, .comma { flex: 0 0 auto; }
+
+/* Visibility dot: fill state carries on/off, the tint says which object it is
+   (PRD §8.4 — never hue alone). */
+.dot {
+  width: 14px; height: 14px;
+  min-width: 14px;
+  padding: 0;
+  margin-right: 6px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  cursor: pointer;
+}
+.dot:hover { transform: scale(1.14); }
+
+.row-line {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  padding: 5px 0 0 20px;
+}
+
+.row-error {
+  font-size: 11.5px;
+  color: var(--error);
+  background: var(--error-bg);
+  border-radius: 5px;
+  padding: 3px 7px;
+  margin: 6px 0 0 20px;
+  display: inline-block;
+}
+
+/* Always visible, as in Warp — a control that appears on hover is invisible to
+   anyone navigating by keyboard or touch. */
+.row-remove {
+  flex: 0 0 auto;
+  width: 22px; height: 22px;
+  padding: 0;
+  line-height: 1;
+  font-size: 17px;
+  color: #c3c9d4;
+  border: none;
+  background: transparent;
+}
+.row-remove:hover { color: var(--error); background: var(--line-soft); }
+
+.row-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 6px 0 0 20px;
+}
+.row-sub .cell { flex: 0 0 62px; max-width: 62px; }
+.tiny-label { font-size: 11px; color: var(--ink-faint); }
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 8px 0 20px;
+}
+.slider-row input[type="range"] { flex: 1 1 auto; min-width: 0; accent-color: var(--accent); }
+.bound {
+  font-family: var(--mono);
+  font-size: 11px;
+  width: 38px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.rows-empty {
+  padding: 16px 14px 16px 30px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+/* --- sidebar footer ------------------------------------------------------ */
+
+.side-foot {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line-soft);
+  padding: 9px 12px 10px;
+  text-align: center;
+}
+.foot-hint { margin: 0; font-size: 11px; line-height: 1.6; color: var(--ink-faint); }
+.foot-keys { margin-top: 2px; }
+
+code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--line-soft);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+kbd {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 3px;
+  background: #fff;
+  color: var(--ink-soft);
+}
+
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--ink-faint);
+  text-decoration: underline;
+  padding: 4px 0 0;
+  font-size: 11px;
+}
+.link-btn:hover { background: none; color: var(--ink); }
+
+/* Motion has an off switch (PRD §8.3). Nothing in v0.2 animates; the rule is
+   recorded so the first animated thing inherits it rather than discovering it. */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+@media (max-width: 780px) {
+  .body { flex-direction: column; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); max-height: 46%; }
+}
+
+/* --- Phase 1: probe / curve / region rows -------------------------------- */
+
+.row-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 5px 0 0 20px;
+}
+.tiny-label { font-size: 11px; color: var(--ink-faint); }
+
+/* --- the ghost tour ------------------------------------------------------ */
+
+/* The dimming layer *is* the spotlight's box-shadow, so the highlighted element
+   stays at full brightness inside the cutout — no mask, no four scrim rects.
+   Straight from Warp's implementation. */
+
+.tour-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.tour-spotlight {
+  position: fixed;
+  z-index: 1001;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(23, 30, 42, 0.45);
+  pointer-events: none;
+  transition: top 0.28s ease, left 0.28s ease, width 0.28s ease,
+    height 0.28s ease;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 1002;
+  width: 300px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  padding: 14px 16px 12px;
+  transition: top 0.28s ease, left 0.28s ease;
+}
+.tour-card:focus { outline: none; }
+.tour-card h2 {
+  margin: 0 24px 6px 0;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.tour-card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.tour-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+.tour-close:hover { background: var(--line-soft); color: var(--ink); }
+
+.tour-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.tour-count {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.tour-btn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+}
+.tour-btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+.tour-btn.primary:hover { background: #22337a; }
+.tour-btn.ghost {
+  background: transparent;
+  color: var(--ink-faint);
+  border: 1px solid var(--line);
+}
+.tour-btn.ghost:hover { color: var(--ink); border-color: #cfd4db; }
+
+/* Motion has an off switch (PRD §8.3): the spotlight glide is the only animation
+   in v0.2, and it is the first thing to go. */
+@media (prefers-reduced-motion: reduce) {
+  .tour-spotlight, .tour-card { transition: none; }
+}
+
+@media (max-width: 780px) {
+  .body { flex-direction: column; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--line); max-height: 46%; }
+}
+
+/* --- the second line of a row: a curve's t interval ---------------------- */
+
+.row-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 5px 0 0 20px;
+}
+.tiny-label { font-size: 11px; color: var(--ink-faint); }

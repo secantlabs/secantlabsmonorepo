@@ -15,6 +15,7 @@ is the umbrella for the family of tools that follows it.
 apps/
   landing/    secantlabs.org — the org page and the tool cards
   warp/       Warp, the linear algebra sandbox (warp.us.com)
+  flux/       Flux, the vector field sandbox (secantlabs.org/flux)
   lessons/    Interactive MDX articles that embed live Warp scenes
 packages/
   engine/     @secantlabs/engine — the pure math kernel: 2x2/3x3 linear
@@ -36,8 +37,10 @@ npm install
 npm run dev          # landing page      → localhost:5174
 npm run dev:warp     # Warp              → localhost:5175
 npm run dev:lessons  # lessons           → localhost:5176/warp-lessons/
-npm test             # engine test suite (35 tests)
-npm run build        # type-check + build landing and warp
+npm run dev:flux     # Flux              → localhost:5180/flux/
+npm test             # engine test suite (123 tests)
+npm run build        # type-check + build landing, warp and flux, and
+                     # assemble the published site into apps/landing/dist
 ```
 
 To develop lesson scenes against a local Warp instead of production:
@@ -57,9 +60,16 @@ domain, and this repo has two CNAME files wanting different ones —
 (warp.us.com). If both ever reached the same `gh-pages` branch, whichever landed
 at the root would silently decide the domain for both.
 
+**A subpath app is how you ship without re-opening that question.** Flux builds
+with `base: "/flux/"`, carries no CNAME, and the root `build` script copies its
+`dist` into `apps/landing/dist/flux` — so it rides the existing publish as a
+subdirectory and the workflow needed no edit at all. The rule this leaves intact:
+*nothing with a CNAME of its own may reach the `gh-pages` root.*
+
 | Site | Served from | URL |
 | --- | --- | --- |
 | Landing | this repo's `gh-pages` | secantlabs.org |
+| Flux | this repo's `gh-pages`, `/flux` subdirectory | secantlabs.org/flux |
 | Warp | `toringastich/warp`'s `gh-pages` (frozen build) | warp.us.com |
 | Lessons | `toringastich/warp-lessons`' `gh-pages` | toringastich.github.io/warp-lessons/ |
 
@@ -85,6 +95,13 @@ Two things carry that entry, not one:
 
 So until Aug 31: don't deploy lessons from here, don't move warp.us.com, and
 don't transfer either source repo to the org — a transfer moves its Pages URL.
+
+**What the freeze does not forbid.** It binds those two URLs, not this repo's own
+Pages content. Flux shipped to secantlabs.org/flux on Aug 10, mid-freeze, and
+touched neither: it publishes as a subdirectory of the landing site, brings no
+CNAME, and the judged article's iframes still point at warp.us.com in its own
+repo. A new subpath app under secantlabs.org is fair game; anything that moves
+warp.us.com or serves the lessons path from here is not.
 
 After Aug 31 the cutover is small: point `apps/lessons` at `base: "/lessons/"`,
 add both apps to the root `build` script and the deploy workflow, decide how
