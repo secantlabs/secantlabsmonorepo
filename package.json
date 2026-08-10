@@ -17,7 +17,10 @@
     "dev": "npm run dev -w apps/landing",
     "dev:warp": "npm run dev -w apps/warp",
     "dev:lessons": "npm run dev -w apps/lessons",
-    "build": "npm run build -w apps/landing && npm run build -w apps/warp",
+    "dev:flux": "npm run dev -w apps/flux",
+    "build": "npm run build -w apps/landing && npm run build -w apps/warp && npm run build:flux && npm run assemble:flux",
+    "build:flux": "npm run build -w apps/flux",
+    "assemble:flux": "mkdir -p apps/landing/dist/flux && cp -R apps/flux/dist/. apps/landing/dist/flux/",
     "test": "npm run test -w packages/engine"
   }
 }
