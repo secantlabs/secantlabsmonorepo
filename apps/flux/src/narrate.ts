@@ -50,7 +50,7 @@ export function describeScene(s: SceneSummary): string {
             ? ` Undefined in places, marked with open circles.`
             : "") +
           (scan.overflow
-            ? ` Too large to represent in places, marked with open squares.`
+            ? ` Some values are too large to plot, so those arrows are left out.`
             : ""),
       );
     }

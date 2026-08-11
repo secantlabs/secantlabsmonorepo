@@ -53,6 +53,7 @@ export default function App() {
   const [staleLink] = useState(initial.staleLink);
   const [tourOpen, setTourOpen] = useState(initial.showTour);
   const [copied, setCopied] = useState(false);
+  const [unplottable, setUnplottable] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   /**
@@ -346,8 +347,20 @@ export default function App() {
             onHandleMove={onHandleMove}
             onHandleNudge={onHandleNudge}
             onSelect={onSelect}
+            onUnplottable={setUnplottable}
             focusRef={canvasRef}
           />
+          {/* Desmos-style: the graph says when it couldn't draw everything.
+              Load-bearing rather than decorative — arrows past double range are
+              left out entirely, and an unexplained gap reads as "the field is
+              zero here", which is the very thing the singular marker exists to
+              prevent. It clears itself as soon as you pan back. */}
+          {unplottable && (
+            <div className="graph-notice" role="status">
+              <span aria-hidden="true">⚠</span> Some values are too large to
+              plot — those arrows aren&rsquo;t drawn.
+            </div>
+          )}
           {/* Floating over the canvas, as Warp does it — chrome that belongs to
               the tool rather than to the graph stays off the sidebar. */}
           <div className="stage-actions">

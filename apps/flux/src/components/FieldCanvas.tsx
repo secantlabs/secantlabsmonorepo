@@ -16,8 +16,15 @@
  *   - **Singularities are marked, not rendered.** An open circle where the field
  *     is undefined, rather than whatever chaos sampling produces there. Drawing
  *     nothing would read as "the field is zero here", which is the opposite.
- *     An open *square* means something different: the field is defined there but
- *     its magnitude left the range of a double (see `classifyNonFinite`).
+ *
+ *     A magnitude past the range of a double is a *different* fact and gets a
+ *     different treatment: nothing is drawn at all, and a single notice appears
+ *     over the graph. Marking each such sample individually tiled whole regions
+ *     with markers — hundreds of them for `(e^x, 2)` past x ≈ 709 — which read as
+ *     hundreds of separate problems rather than one boundary. The notice is what
+ *     stops the resulting blank from reading as "the field is zero here"; without
+ *     it, leaving these undrawn would repeat the mistake the circle exists to
+ *     avoid. `classifyNonFinite` decides which case a sample is.
  *
  * What counts as a singularity is decided by **divergence under refinement**, and
  * never by comparing a magnitude to the rest of the window. An earlier version
@@ -82,6 +89,12 @@ interface Props {
    */
   onHandleNudge: (handle: Handle, dx: number, dy: number) => void;
   onSelect: (handleId: string | null) => void;
+  /**
+   * True when part of the visible window has a magnitude past double range, so
+   * some arrows were left out. Drives the notice over the graph — without which
+   * the gap would read as "the field is zero here".
+   */
+  onUnplottable: (any: boolean) => void;
   focusRef?: React.RefObject<HTMLCanvasElement>;
 }
 
@@ -167,6 +180,7 @@ export default function FieldCanvas({
   onHandleMove,
   onHandleNudge,
   onSelect,
+  onUnplottable,
   focusRef,
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -368,6 +382,7 @@ export default function FieldCanvas({
    */
   const drawRef = useRef<() => void>(() => {});
   const frameRef = useRef(0);
+  const unplottableRef = useRef(false);
   const schedule = useCallback(() => {
     cancelAnimationFrame(frameRef.current);
     frameRef.current = requestAnimationFrame(() => drawRef.current());
@@ -462,7 +477,16 @@ export default function FieldCanvas({
       }
 
       // --- the fields, then the geometry on top ---------------------------
-      for (const cf of fields) drawArrows(ctx, cf.F, scope, view, w, h);
+      let unplottable = 0;
+      for (const cf of fields)
+        unplottable += drawArrows(ctx, cf.F, scope, view, w, h);
+      // Only cross the React boundary when the answer actually changes, so a
+      // pan that stays inside (or outside) the region costs no re-render.
+      const any = unplottable > 0;
+      if (any !== unplottableRef.current) {
+        unplottableRef.current = any;
+        onUnplottable(any);
+      }
       for (const cv of curves) drawCurve(ctx, cv, toPx);
       for (const p of points) drawPoint(ctx, p, toPx);
       drawHandles(ctx, handles, selected, toPx);
@@ -475,7 +499,18 @@ export default function FieldCanvas({
     // scene changes. Do NOT replace this with a summary string — an earlier
     // version did, silently omitted the field *expressions*, and the canvas kept
     // drawing a stale field while every readout updated correctly.
-  }, [canvasRef, view, fields, curves, points, handles, selected, scope]);
+  }, [
+    canvasRef,
+    view,
+    fields,
+    curves,
+    points,
+    handles,
+    selected,
+    scope,
+    onUnplottable,
+    schedule,
+  ]);
 
   const selectedHandle = handles.find((h) => h.id === selected) ?? null;
 
@@ -507,6 +542,7 @@ const round = (n: number): string =>
 // Field rendering
 // ---------------------------------------------------------------------------
 
+/** Returns how many samples were past double range and so left undrawn. */
 function drawArrows(
   ctx: CanvasRenderingContext2D,
   F: Field2,
@@ -514,7 +550,7 @@ function drawArrows(
   view: View,
   w: number,
   h: number,
-) {
+): number {
   const { cx, cy, scale } = view;
   const toPx = (x: number, y: number): [number, number] => [
     w / 2 + (x - cx) * scale,
@@ -550,7 +586,8 @@ function drawArrows(
   const samples: Sample[] = [];
   const grid = new Map<string, Sample>();
   const singular: [number, number][] = [];
-  const overflow: [number, number][] = [];
+  /** Counted, not drawn — the notice over the graph speaks for all of them. */
+  let unplottable = 0;
   const mags: number[] = [];
   const key = (i: number, j: number) => `${i},${j}`;
 
@@ -579,12 +616,14 @@ function drawArrows(
       if (j < jMin) jMin = j;
       if (j > jMax) jMax = j;
       const v = sample(x, y);
-      if (!v) return; // unresolvable field draws nothing; the row reports why
+      if (!v) return 0; // unresolvable field draws nothing; the row reports why
       if (!Number.isFinite(v.x) || !Number.isFinite(v.y)) {
-        // Undefined, or merely too big for a double? They mean different things
-        // and get different marks.
-        const kind = classifyNonFinite(F, x, y, spacing * 0.5, scope);
-        (kind === "overflow" ? overflow : singular).push(toPx(x, y));
+        // Undefined, or merely too big for a double? An undefined point gets a
+        // marker; a too-large one gets counted and left blank, because marking
+        // each of them tiles whole regions with markers.
+        if (classifyNonFinite(F, x, y, spacing * 0.5, scope) === "overflow")
+          unplottable++;
+        else singular.push(toPx(x, y));
         continue;
       }
       const mag = Math.hypot(v.x, v.y);
@@ -635,7 +674,8 @@ function drawArrows(
   if (candidates.length > MAX_CANDIDATES) candidates.length = MAX_CANDIDATES;
 
   for (const s of findPoles(candidates, spacing, F, scope, sample)) {
-    (s.kind === "overflow" ? overflow : singular).push(toPx(s.x, s.y));
+    if (s.kind === "overflow") unplottable++;
+    else singular.push(toPx(s.x, s.y));
   }
 
   for (const s of samples) {
@@ -677,8 +717,8 @@ function drawArrows(
     ctx.fill();
   }
 
-  drawOverflowMarks(ctx, overflow);
   drawSingularMarks(ctx, singular);
+  return unplottable;
 }
 
 /** An open circle: "undefined here" as a statement, not an absence. */
@@ -693,30 +733,6 @@ function drawSingularMarks(
   for (const [px, py] of at) {
     ctx.beginPath();
     ctx.arc(px, py, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-}
-
-/**
- * An open square: the field is defined here, but its magnitude is past what a
- * double can hold. A different *shape* rather than a different colour, so the
- * distinction survives any colour vision (PRD §8.4) — and a lighter stroke,
- * because overflow covers whole regions rather than isolated points and a region
- * of heavy marks would read as a wall of alarms.
- */
-function drawOverflowMarks(
-  ctx: CanvasRenderingContext2D,
-  at: [number, number][],
-) {
-  if (!at.length) return;
-  ctx.strokeStyle = COLORS.singular;
-  ctx.fillStyle = "#fff";
-  ctx.lineWidth = 1.1;
-  const r = 3.6;
-  for (const [px, py] of at) {
-    ctx.beginPath();
-    ctx.rect(px - r, py - r, r * 2, r * 2);
     ctx.fill();
     ctx.stroke();
   }

@@ -106,11 +106,16 @@ These each cost real debugging to get right.
    already in hand), and the climb must **not** bail out early on a round that
    finds no improvement, which aborted the search before the box was fine enough
    to reach a pole near a lattice point — 4 misses out of 12 with it in.
-4c. **Non-finite has two causes and they draw differently.** An open circle means
-   undefined; an open **square** means the field is defined but its magnitude left
-   double range, which `(e^x, 2)` does past x ≈ 709. `classifyNonFinite` in the
-   engine decides, and the canvas, the point row and the screen-reader label all
-   read from it so they cannot contradict each other.
+4c. **Non-finite has two causes and they are shown differently.** An open circle
+   means undefined. A magnitude past double range — which `(e^x, 2)` reaches past
+   x ≈ 709 — draws **nothing**, and raises one notice over the graph instead.
+   Marking each such sample tiled whole regions with markers, reading as hundreds
+   of separate problems rather than one boundary. **The notice is load-bearing:**
+   without it the blank region reads as "the field is zero here", which is exactly
+   what the singular circle exists to prevent, so the two must not be separated.
+   `classifyNonFinite` in the engine decides which case a sample is, and the
+   canvas, the point row and the screen-reader label all read from it so they
+   cannot contradict each other.
 4d. **Persistence is debounced, and that is a crash fix.** The view lives in the
    document, so an immediate save called `history.replaceState` on every wheel
    tick; WebKit throws `SecurityError` past ~100 calls per 30 seconds, and with no
@@ -147,8 +152,9 @@ Checked in-browser, not just typechecked:
 - A curve reports `length`, and the whole scene round-trips the `#f1=` hash — a
   hash from another format version shows the starter scene and says so.
 - `(e^x, 2)` over x ∈ [0.5, 15.5] draws **no** markers at all (it drew ~300).
-- The same field panned to x ≈ 712 draws open **squares**, with the boundary
-  landing exactly where `Math.exp` overflows, and arrows intact to its left.
+- The same field panned to x ≈ 712 draws **nothing** past the point where
+  `Math.exp` overflows, arrows intact to its left, and raises the "too large to
+  plot" notice; the notice is absent on any ordinary view.
 - `1/(x − 2.31)` marks its pole line with circles between the x = 2 and x = 2.5
   lattice columns, arrows reversing across it.
 - `(−y, x)/(x²+y²)` still marks the origin with one circle and no smear.
