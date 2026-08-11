@@ -45,6 +45,9 @@ import {
 
 const initial = loadInitialState();
 
+/** Long enough that a pan or zoom gesture writes once, short enough to feel instant. */
+const SAVE_DEBOUNCE_MS = 350;
+
 export default function App() {
   const [doc, setDoc] = useState<Doc>(initial.doc);
   const [staleLink] = useState(initial.staleLink);
@@ -52,9 +55,34 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  /**
+   * Persistence is debounced, and that is a correctness fix rather than a
+   * micro-optimisation. The view lives in the document, so an immediate save ran
+   * on every wheel tick of a zoom — and `saveState` calls `history.replaceState`,
+   * which WebKit caps at ~100 calls per 30 seconds before throwing. About a
+   * second of continuous zooming exhausted the budget, and with no error boundary
+   * the throw unmounted the app: a blank page mid-gesture.
+   *
+   * A gesture settles long before this delay matters to anyone, and the address
+   * bar has no reason to be correct halfway through a zoom.
+   */
   useEffect(() => {
-    saveState(doc);
+    const t = setTimeout(() => saveState(doc), SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(t);
   }, [doc]);
+
+  /**
+   * ...but a debounce means the last change is still pending when a tab closes,
+   * so flush on the way out. `pagehide` fires where `beforeunload` is unreliable
+   * (iOS Safari especially).
+   */
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  useEffect(() => {
+    const flush = () => saveState(docRef.current);
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, []);
 
   const restoreRows = useCallback((rows: Row[]) => {
     setDoc((d) => ({ ...d, rows, selected: null }));

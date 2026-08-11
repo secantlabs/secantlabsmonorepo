@@ -251,6 +251,17 @@ export function loadInitialState(): {
   return { doc: starterDoc(), staleLink: false, showTour: !seen };
 }
 
+/**
+ * Write the scene to localStorage and the address bar.
+ *
+ * **Call this debounced, never per frame.** WebKit throws `SecurityError` after
+ * about 100 `replaceState` calls in 30 seconds, and Chrome throttles with a
+ * navigation warning. Since the view lives in the document, an undebounced save
+ * fires on every wheel tick of a zoom — 60–120 a second, so roughly one second
+ * of zooming used the whole budget and the throw took the app down with it.
+ * App.tsx owns the debounce; the try/catch here is the backstop, because losing
+ * a URL update must never cost the user their scene.
+ */
 export function saveState(doc: Doc): void {
   const enc = encodeState(doc);
   try {
@@ -258,7 +269,11 @@ export function saveState(doc: Doc): void {
   } catch {
     // storage unavailable; the URL still carries the scene
   }
-  history.replaceState(null, "", HASH_PREFIX + enc);
+  try {
+    history.replaceState(null, "", HASH_PREFIX + enc);
+  } catch {
+    // throttled by the browser; the next debounced save will carry this state
+  }
 }
 
 export type { RowId };
