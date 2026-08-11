@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parse, type Node } from "../src/elem";
 import {
   arcLength,
+  classifyNonFinite,
   curl,
   curlPoly,
   diffNode,
@@ -84,6 +85,27 @@ describe("divergence and curl", () => {
     expect(isSingularAt(inv, 0, 0)).toBe(true);
     expect(isSingularAt(inv, 1, 1)).toBe(false);
     expect(isSingularAt(F("x", "a"), 0, 0)).toBe(true); // unbound name
+  });
+
+  it("tells a pole apart from a field that merely overflowed a double", () => {
+    // exp(x) leaves double range past x ≈ 709.78, but nothing is undefined
+    // there — calling it a singularity teaches a false fact about the field.
+    const grow = F("exp(x)", "2");
+    expect(evalField(grow, 710, 0).x).toBe(Infinity);
+    expect(classifyNonFinite(grow, 710, 0, 0.25)).toBe("overflow");
+    expect(classifyNonFinite(grow, 1e4, 0, 0.25)).toBe("overflow"); // deep in the region
+
+    // A genuine pole is an isolated spike: step away and the field is ordinary.
+    expect(classifyNonFinite(F("-y/(x^2 + y^2)", "x/(x^2 + y^2)"), 0, 0, 0.25)).toBe("singular");
+    expect(classifyNonFinite(F("x/(x^2+y^2)^1.5", "y/(x^2+y^2)^1.5"), 0, 0, 0.25)).toBe("singular");
+    expect(classifyNonFinite(F("1/(x - 3)", "0"), 3, 1, 0.25)).toBe("singular");
+  });
+
+  it("calls a whole neighbourhood out of range an overflow, not a pole", () => {
+    // exp(exp(x)) is non-finite for every probe around x = 10, so there is no
+    // finite neighbour to compare against.
+    const wild = F("exp(exp(x))", "0");
+    expect(classifyNonFinite(wild, 10, 0, 0.25)).toBe("overflow");
   });
 });
 

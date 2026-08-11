@@ -121,6 +121,59 @@ export function isSingularAt(
   }
 }
 
+/** Why a sample has no drawable vector. */
+export type Undrawable = "singular" | "overflow";
+
+/**
+ * A double runs out of exponent at ~1.8e308, so a field that is perfectly
+ * well defined can still evaluate to Infinity: `(e^x, 2)` does it past x ≈ 709.
+ * Reporting that as a singularity is wrong — nothing is undefined there, the
+ * *number* merely left the range we can represent — and it is the kind of wrong
+ * that teaches a false fact about the field.
+ *
+ * The two cases look different in a neighbourhood, and that is what this tests.
+ * Around a pole the field is an isolated spike: step away by `probe` and the
+ * magnitude is back to ordinary numbers. Around an overflow the field is
+ * enormous *everywhere* nearby, because it got there by growing smoothly.
+ *
+ * So: take the largest finite magnitude among eight neighbours at radius
+ * `probe`. If nothing nearby is even finite, or the nearest finite value is
+ * itself astronomical, this is overflow. Otherwise it is a genuine singularity.
+ */
+export function classifyNonFinite(
+  F: Field2,
+  x: number,
+  y: number,
+  probe: number,
+  scope: Scope = EMPTY_SCOPE,
+): Undrawable {
+  // Far above any magnitude a real scene reaches, far below the 1.8e308 ceiling:
+  // a pole would have to sit within 1e-150 of the sample to reach this, and at
+  // that distance either verdict draws the same mark in the same place.
+  const ASTRONOMICAL = 1e150;
+  let maxFinite = -1;
+  for (const [ox, oy] of [
+    [probe, 0],
+    [-probe, 0],
+    [0, probe],
+    [0, -probe],
+    [probe, probe],
+    [probe, -probe],
+    [-probe, probe],
+    [-probe, -probe],
+  ]) {
+    try {
+      const v = evalField(F, x + ox, y + oy, scope);
+      const m = Math.hypot(v.x, v.y);
+      if (Number.isFinite(m) && m > maxFinite) maxFinite = m;
+    } catch {
+      // An evaluation error is not evidence either way; keep looking.
+    }
+  }
+  if (maxFinite < 0) return "overflow"; // a whole region out of range is not a pole
+  return maxFinite >= ASTRONOMICAL ? "overflow" : "singular";
+}
+
 // ---------------------------------------------------------------------------
 // The symbolic path — exact text when the field is polynomial
 // ---------------------------------------------------------------------------

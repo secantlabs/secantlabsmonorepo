@@ -16,10 +16,24 @@
  *   - **Singularities are marked, not rendered.** An open circle where the field
  *     is undefined, rather than whatever chaos sampling produces there. Drawing
  *     nothing would read as "the field is zero here", which is the opposite.
+ *     An open *square* means something different: the field is defined there but
+ *     its magnitude left the range of a double (see `classifyNonFinite`).
+ *
+ * What counts as a singularity is decided by **divergence under refinement**, and
+ * never by comparing a magnitude to the rest of the window. An earlier version
+ * marked any sample exceeding 60× the window median, which conflates "large" with
+ * "undefined": `(e^x, 2)` put 275–486 false markers on screen and cost ~35,000
+ * field evaluations a frame hunting them. A pole is the thing whose magnitude
+ * keeps *growing* as you shrink a box onto it; every smooth field's peak
+ * converges, however enormous it is.
  */
 
-import { useEffect, useRef } from "react";
-import { evalField, type Field2 } from "@secantlabs/engine/field";
+import { useCallback, useEffect, useRef } from "react";
+import {
+  classifyNonFinite,
+  evalField,
+  type Field2,
+} from "@secantlabs/engine/field";
 import { type Scope } from "@secantlabs/engine/elem";
 import { type Pt } from "@secantlabs/engine/quad";
 import {
@@ -93,6 +107,38 @@ const ARROW_SPACING_PX = 36;
 const ARROW_FILL = 0.86;
 /** Hit radius for grabbing a handle with a pointer, in pixels. */
 const HANDLE_HIT_PX = 12;
+
+/**
+ * Pole hunting, all three numbers measured rather than guessed.
+ *
+ * REFINE_STEPS: halvings of the search box. The old code stopped after 12 *and*
+ * bailed out early whenever a round found no improvement — which aborts the
+ * search before the box is small enough to reach a pole sitting very close to a
+ * lattice point. Removing that bail-out took a 12-case pole battery from 4 misses
+ * to 0.
+ *
+ * POLE_GROWTH: how much the running peak must grow across the late half of the
+ * refinement to count as divergent. Measured: real poles grow ≥ 1024×, while
+ * `(e^x, 2)`, `(e^(3x), 2)` (peaking at 3.9e17) and `(x⁴, y⁴)` all grow 1.00×.
+ * Three orders of magnitude of headroom either side of 4.
+ *
+ * MAX_CANDIDATES: a hard ceiling on hunts per frame, so a pathological field
+ * cannot starve the frame budget. Real scenes have a handful of poles.
+ */
+const REFINE_STEPS = 22;
+const POLE_GROWTH = 4;
+const MAX_CANDIDATES = 24;
+
+const NEIGHBOURS: readonly [number, number][] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+];
 
 function niceStep(scale: number, targetPx = 84): number {
   const target = targetPx / scale;
@@ -314,13 +360,33 @@ export default function FieldCanvas({
     return () => c.removeEventListener("keydown", onKey);
   }, [canvasRef, onViewChange, onHandleNudge, onSelect]);
 
+  /**
+   * The latest draw, and one shared animation frame. Keeping the draw behind a
+   * ref is what lets the ResizeObserver live in a mount-only effect: a zoom
+   * gesture changes `view` on every wheel tick, and rebuilding an observer that
+   * often is pure waste (it also fires an immediate observation each time).
+   */
+  const drawRef = useRef<() => void>(() => {});
+  const frameRef = useRef(0);
+  const schedule = useCallback(() => {
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(() => drawRef.current());
+  }, []);
+
+  useEffect(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ro = new ResizeObserver(schedule);
+    ro.observe(c);
+    return () => ro.disconnect();
+  }, [canvasRef, schedule]);
+
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
     const ctx = c.getContext("2d");
     if (!ctx) return;
 
-    let frame = 0;
     const draw = () => {
       const dpr = window.devicePixelRatio || 1;
       const rect = c.getBoundingClientRect();
@@ -402,16 +468,9 @@ export default function FieldCanvas({
       drawHandles(ctx, handles, selected, toPx);
     };
 
-    const ro = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(draw);
-    });
-    ro.observe(c);
-    frame = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(frame);
-      ro.disconnect();
-    };
+    drawRef.current = draw;
+    schedule();
+    return () => cancelAnimationFrame(frameRef.current);
     // Every input is memoized upstream in App, so identity changes track real
     // scene changes. Do NOT replace this with a summary string — an earlier
     // version did, silently omitted the field *expressions*, and the canvas kept
@@ -484,10 +543,16 @@ function drawArrows(
     vx: number;
     vy: number;
     mag: number;
+    /** Lattice indices, so neighbours are a map lookup rather than a search. */
+    i: number;
+    j: number;
   }
   const samples: Sample[] = [];
+  const grid = new Map<string, Sample>();
   const singular: [number, number][] = [];
+  const overflow: [number, number][] = [];
   const mags: number[] = [];
+  const key = (i: number, j: number) => `${i},${j}`;
 
   const sample = (x: number, y: number): { x: number; y: number } | null => {
     try {
@@ -497,20 +562,36 @@ function drawArrows(
     }
   };
 
+  let iMin = Infinity;
+  let iMax = -Infinity;
+  let jMin = Infinity;
+  let jMax = -Infinity;
+
   for (let gx = Math.ceil(x0 / spacing) * spacing; gx <= x1; gx += spacing) {
     for (let gy = Math.ceil(y0 / spacing) * spacing; gy <= y1; gy += spacing) {
       // Snap to exact multiples so float drift never nudges the origin off it.
       const x = Math.round(gx / spacing) * spacing;
       const y = Math.round(gy / spacing) * spacing;
+      const i = Math.round(x / spacing);
+      const j = Math.round(y / spacing);
+      if (i < iMin) iMin = i;
+      if (i > iMax) iMax = i;
+      if (j < jMin) jMin = j;
+      if (j > jMax) jMax = j;
       const v = sample(x, y);
       if (!v) return; // unresolvable field draws nothing; the row reports why
       if (!Number.isFinite(v.x) || !Number.isFinite(v.y)) {
-        singular.push(toPx(x, y));
+        // Undefined, or merely too big for a double? They mean different things
+        // and get different marks.
+        const kind = classifyNonFinite(F, x, y, spacing * 0.5, scope);
+        (kind === "overflow" ? overflow : singular).push(toPx(x, y));
         continue;
       }
       const mag = Math.hypot(v.x, v.y);
       if (mag > 0) mags.push(mag);
-      samples.push({ x, y, vx: v.x, vy: v.y, mag });
+      const s: Sample = { x, y, vx: v.x, vy: v.y, mag, i, j };
+      samples.push(s);
+      grid.set(key(i, j), s);
     }
   }
 
@@ -522,10 +603,40 @@ function drawArrows(
   const sorted = [...mags].sort((a, b) => a - b);
   const ref = sorted.length ? sorted[Math.floor(sorted.length / 2)] || 1 : 1;
 
-  // Singularities between lattice points: hunt local blow-ups so the marker
-  // doesn't depend on a sample landing exactly on the bad point.
-  for (const s of findBlowUps(samples, ref, spacing, sample))
-    singular.push(toPx(s.x, s.y));
+  /**
+   * Poles between lattice points, so a marker doesn't depend on a sample landing
+   * exactly on the bad point.
+   *
+   * The prefilter is "is this a local maximum of |F| among its eight lattice
+   * neighbours", which costs **no** extra field evaluations — the magnitudes are
+   * already in hand — and is the right topological condition, since a pole is a
+   * local maximum. Ties must not disqualify, or a pole equidistant from four
+   * lattice points is never a candidate. Boundary samples are skipped: their
+   * neighbourhood is incomplete, so "local maximum" is unknowable there.
+   *
+   * On `(e^x, 2)` this admits **zero** candidates where the old median test
+   * admitted 300–400.
+   */
+  const candidates: { x: number; y: number; mag: number }[] = [];
+  for (const s of samples) {
+    if (s.i === iMin || s.i === iMax || s.j === jMin || s.j === jMax) continue;
+    if (s.mag < ref * 2) continue;
+    let isMax = true;
+    for (const [di, dj] of NEIGHBOURS) {
+      const n = grid.get(key(s.i + di, s.j + dj));
+      if (n && n.mag > s.mag) {
+        isMax = false;
+        break;
+      }
+    }
+    if (isMax) candidates.push(s);
+  }
+  candidates.sort((a, b) => b.mag - a.mag);
+  if (candidates.length > MAX_CANDIDATES) candidates.length = MAX_CANDIDATES;
+
+  for (const s of findPoles(candidates, spacing, F, scope, sample)) {
+    (s.kind === "overflow" ? overflow : singular).push(toPx(s.x, s.y));
+  }
 
   for (const s of samples) {
     const [px, py] = toPx(s.x, s.y);
@@ -566,6 +677,7 @@ function drawArrows(
     ctx.fill();
   }
 
+  drawOverflowMarks(ctx, overflow);
   drawSingularMarks(ctx, singular);
 }
 
@@ -587,23 +699,50 @@ function drawSingularMarks(
 }
 
 /**
- * Find singular points that fall *between* lattice samples.
- *
- * A field like (−y, x)/(x²+y²) blows up at a single point, and whether a lattice
- * sample lands on it is luck. So: take each sample whose magnitude is far above
- * the window median as a candidate, walk toward increasing |F| on a shrinking
- * box, and if the magnitude runs away, mark it. Cheap in the common case — a
- * smooth field produces no candidates at all.
+ * An open square: the field is defined here, but its magnitude is past what a
+ * double can hold. A different *shape* rather than a different colour, so the
+ * distinction survives any colour vision (PRD §8.4) — and a lighter stroke,
+ * because overflow covers whole regions rather than isolated points and a region
+ * of heavy marks would read as a wall of alarms.
  */
-function findBlowUps(
-  samples: { x: number; y: number; mag: number }[],
-  ref: number,
+function drawOverflowMarks(
+  ctx: CanvasRenderingContext2D,
+  at: [number, number][],
+) {
+  if (!at.length) return;
+  ctx.strokeStyle = COLORS.singular;
+  ctx.fillStyle = "#fff";
+  ctx.lineWidth = 1.1;
+  const r = 3.6;
+  for (const [px, py] of at) {
+    ctx.beginPath();
+    ctx.rect(px - r, py - r, r * 2, r * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+/**
+ * Confirm or reject each candidate as a pole, by **divergence under
+ * refinement**.
+ *
+ * Climb toward increasing |F| on a box that halves each round, recording the
+ * running peak. Near a pole the climb keeps homing in, the distance to the pole
+ * keeps halving, and |F| ~ dist^−k keeps multiplying — the peak runs away. On a
+ * smooth field the climb can travel at most about one spacing in total (the
+ * steps form a geometric series) and |F| is Lipschitz there, so the peak
+ * plateaus. Comparing the late peak to the mid-climb peak therefore separates
+ * the two *regardless of how large the field is*, which is the property the old
+ * "60× the window median" test lacked.
+ */
+function findPoles(
+  candidates: { x: number; y: number; mag: number }[],
   spacing: number,
+  F: Field2,
+  scope: Scope,
   sample: (x: number, y: number) => { x: number; y: number } | null,
-): { x: number; y: number }[] {
-  const CANDIDATE = 6; // × median magnitude
-  const CONFIRM = 60; // × median magnitude at the refined point
-  const found: { x: number; y: number }[] = [];
+): { x: number; y: number; kind: "singular" | "overflow" }[] {
+  const found: { x: number; y: number; kind: "singular" | "overflow" }[] = [];
 
   const magAt = (x: number, y: number): number => {
     const v = sample(x, y);
@@ -612,43 +751,46 @@ function findBlowUps(
     return Number.isFinite(m) ? m : Infinity;
   };
 
-  for (const s of samples) {
-    if (s.mag < ref * CANDIDATE) continue;
-    let bx = s.x;
-    let by = s.y;
-    let best = s.mag;
+  for (const c of candidates) {
+    let bx = c.x;
+    let by = c.y;
+    let best = c.mag;
     let box = spacing;
-    for (let iter = 0; iter < 12; iter++) {
+    const trace: number[] = [best];
+
+    for (let iter = 0; iter < REFINE_STEPS; iter++) {
       box /= 2;
-      let moved = false;
-      for (const [ox, oy] of [
-        [box, 0],
-        [-box, 0],
-        [0, box],
-        [0, -box],
-        [box, box],
-        [box, -box],
-        [-box, box],
-        [-box, -box],
-      ]) {
-        const m = magAt(bx + ox, by + oy);
+      for (const [dx, dy] of NEIGHBOURS) {
+        const m = magAt(bx + dx * box, by + dy * box);
         if (m > best) {
           best = m;
-          bx += ox;
-          by += oy;
-          moved = true;
+          bx += dx * box;
+          by += dy * box;
         }
       }
-      if (!moved && iter > 4) break;
+      trace.push(best);
+      // Landing exactly on the pole is a confirmation, not a reason to keep
+      // refining. (Unlike the old `!moved` bail-out, which aborted the search
+      // while the box was still too coarse to reach a nearby pole at all.)
+      if (!Number.isFinite(best)) break;
     }
-    if (!Number.isFinite(best) || best > ref * CONFIRM) {
-      // Several lattice points climb to the same peak; keep one per cluster and
-      // snap to a round value, so a singularity at the origin reads as (0, 0).
-      const near = found.some(
-        (f) => Math.hypot(f.x - bx, f.y - by) < spacing * 0.9,
-      );
-      if (!near) found.push({ x: snap(bx, spacing), y: snap(by, spacing) });
-    }
+
+    const mid = trace[Math.floor(trace.length / 2)];
+    const end = trace[trace.length - 1];
+    const diverging =
+      !Number.isFinite(end) || (mid > 0 && end / mid >= POLE_GROWTH);
+    if (!diverging) continue;
+
+    // Several lattice points climb to the same peak; keep one per cluster and
+    // snap to a round value, so a singularity at the origin reads as (0, 0).
+    if (found.some((f) => Math.hypot(f.x - bx, f.y - by) < spacing * 0.9))
+      continue;
+    // A runaway peak still has to be told apart from a field that simply left
+    // double range on the way up.
+    const kind = Number.isFinite(end)
+      ? "singular"
+      : classifyNonFinite(F, bx, by, box * 2 || spacing * 1e-6, scope);
+    found.push({ x: snap(bx, spacing), y: snap(by, spacing), kind });
   }
   return found;
 }

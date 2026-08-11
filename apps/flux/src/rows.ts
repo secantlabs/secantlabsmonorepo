@@ -22,6 +22,7 @@ import {
 } from "@secantlabs/engine/elem";
 import {
   arcLength,
+  classifyNonFinite,
   curlPoly,
   divPoly,
   evalField,
@@ -317,8 +318,18 @@ export function pointResult(
   if (!F || !fieldName) return {};
   try {
     const v = evalField(F, x, y, scope);
-    if (!Number.isFinite(v.x) || !Number.isFinite(v.y))
-      return { lines: [`${fieldName} undefined here`] };
+    if (!Number.isFinite(v.x) || !Number.isFinite(v.y)) {
+      // The canvas draws a circle for one of these and a square for the other;
+      // the row has to say the same thing or they contradict each other.
+      const kind = classifyNonFinite(F, x, y, 0.25, scope);
+      return {
+        lines: [
+          kind === "overflow"
+            ? `${fieldName} too large to represent here`
+            : `${fieldName} undefined here`,
+        ],
+      };
+    }
     return {
       lines: [
         `${fieldName} = (${fmt(v.x)}, ${fmt(v.y)})   |${fieldName}| = ${fmt(Math.hypot(v.x, v.y))}`,
