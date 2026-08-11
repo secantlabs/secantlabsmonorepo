@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flux — a sandbox for vector fields</title>
+    <!-- Describes v0.2 only. The measurement layer this once advertised — probing
+         div/curl, work along a dragged path, both sides of Green's theorem live —
+         is shelved (PRD §13), and a description promising it would sell a tool
+         that isn't here. -->
+    <meta
+      name="description"
+      content="Plot almost any vector field, instantly and for free: type two components and see it, including the inverse-square and singular fields. Add a point you drag and a parameterized curve. No account, no install — a scene is just a URL."
+    />
+    <!-- Flux carries its own copy of the mark rather than reaching for the one at
+         the domain root: a root-absolute path 404s on the dev server, where Flux
+         is served at /flux/ with nothing above it. Vite rewrites these through
+         `base`, so they land at /flux/favicon.* in the build. -->
+    <link rel="icon" href="/flux/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/flux/favicon.ico" sizes="32x32" />
+    <script type="module" crossorigin src="/flux/assets/index-ByuBROEj.js"></script>
+    <link rel="stylesheet" crossorigin href="/flux/assets/index-CvjdRG-a.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

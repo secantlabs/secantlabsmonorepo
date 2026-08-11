@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Secant Labs — interactive tools for seeing the math</title>
+    <meta
+      name="description"
+      content="Secant Labs makes Warp and other free, interactive tools for seeing the mathematics where intuition goes missing. Type an object, watch it act on space — in your browser, no installs."
+    />
+    <link rel="canonical" href="https://secantlabs.org/" />
+    <!-- Real favicon, three forms because browsers disagree. The SVG is drawn by
+         anything modern; the .ico carries 16/32/48 rasters for older browsers and
+         Windows shortcuts; the touch icon is opaque because iOS renders
+         transparency as black. All generated from brand/make-logo.py -- run
+         `npm run brand -w apps/landing` after changing the mark. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <!-- Google's search-result favicon wants a square comfortably above 48px and
+         a URL that stays put. It also cannot use a data: URI, which is what used
+         to be here -- that is why searches showed the generic globe. -->
+    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Secant Labs" />
+    <meta property="og:url" content="https://secantlabs.org/" />
+    <meta
+      property="og:title"
+      content="Secant Labs — interactive tools for seeing the math"
+    />
+    <meta
+      property="og:description"
+      content="Free, interactive tools for the mathematics where intuition goes missing. Type an object, watch it act on space."
+    />
+    <!-- Absolute URL required: scrapers do not resolve relative paths. Source
+         for this image is apps/landing/social-card.svg; regenerate with
+         `npm run card -w apps/landing`. -->
+    <meta property="og:image" content="https://secantlabs.org/social-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Secant Labs — See what the math does. A matrix carrying the basis vectors, with the parallelogram they span labelled det = 3."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:image"
+      content="https://secantlabs.org/social-card.png"
+    />
+    <meta
+      name="twitter:title"
+      content="Secant Labs — interactive tools for seeing the math"
+    />
+    <meta
+      name="twitter:description"
+      content="Free, interactive tools for the mathematics where intuition goes missing. Type an object, watch it act on space."
+    />
+
+    <!-- Google Analytics (GA4). Skipped when embedded in an iframe, so Warp
+         scenes embedded in lessons don't inflate pageviews; skipped on
+         localhost so dev work never pollutes the numbers. -->
+    <script>
+      if (window.self === window.top && location.hostname !== "localhost") {
+        var s = document.createElement("script");
+        s.async = true;
+        s.src = "https://www.googletagmanager.com/gtag/js?id=G-KSXRQBEMD9";
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag("js", new Date());
+        gtag("config", "G-KSXRQBEMD9");
+      }
+    </script>
+    <script type="module" crossorigin src="/assets/index-C0ysNWhM.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CgHFBAhm.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
