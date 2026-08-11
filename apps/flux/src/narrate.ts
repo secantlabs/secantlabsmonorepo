@@ -15,7 +15,12 @@
  * what's drawn.** One line, not a writing project.
  */
 
-import { evalField, isSingularAt, type Field2 } from "@secantlabs/engine/field";
+import {
+  classifyNonFinite,
+  evalField,
+  isSingularAt,
+  type Field2,
+} from "@secantlabs/engine/field";
 import { type Scope } from "@secantlabs/engine/elem";
 import { fmt } from "./format";
 
@@ -43,6 +48,9 @@ export function describeScene(s: SceneSummary): string {
           `Magnitude ${fmt(scan.min)} to ${fmt(scan.max)}.` +
           (scan.singular
             ? ` Undefined in places, marked with open circles.`
+            : "") +
+          (scan.overflow
+            ? ` Too large to represent in places, marked with open squares.`
             : ""),
       );
     }
@@ -58,16 +66,22 @@ export function describeScene(s: SceneSummary): string {
   return parts.join(" ");
 }
 
-/** A coarse scan: enough for a magnitude range and a singularity flag. */
+/**
+ * A coarse scan: enough for a magnitude range and the two "nothing drawable
+ * here" flags. Undefined and too-large-for-a-double are different facts and the
+ * canvas marks them differently, so the label distinguishes them too.
+ */
 function scanField(
   F: Field2,
   scope: Scope,
   w: { x0: number; y0: number; x1: number; y1: number },
-): { min: number; max: number; singular: boolean } {
+): { min: number; max: number; singular: boolean; overflow: boolean } {
   const N = 9;
   let min = Infinity;
   let max = 0;
   let singular = false;
+  let overflow = false;
+  const probe = Math.max((w.x1 - w.x0) / (N - 1) / 4, 1e-9);
   for (let i = 0; i < N; i++) {
     for (let j = 0; j < N; j++) {
       const x = w.x0 + ((w.x1 - w.x0) * i) / (N - 1);
@@ -75,7 +89,9 @@ function scanField(
       try {
         const v = evalField(F, x, y, scope);
         if (!Number.isFinite(v.x) || !Number.isFinite(v.y)) {
-          singular = true;
+          if (classifyNonFinite(F, x, y, probe, scope) === "overflow")
+            overflow = true;
+          else singular = true;
           continue;
         }
         const m = Math.hypot(v.x, v.y);
@@ -83,9 +99,11 @@ function scanField(
         max = Math.max(max, m);
       } catch {
         singular = true;
+        continue;
       }
+      // A finite value whose partials blow up is still a genuine irregularity.
       if (!singular && isSingularAt(F, x, y, scope)) singular = true;
     }
   }
-  return { min: Number.isFinite(min) ? min : 0, max, singular };
+  return { min: Number.isFinite(min) ? min : 0, max, singular, overflow };
 }

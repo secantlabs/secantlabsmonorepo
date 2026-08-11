@@ -93,6 +93,30 @@ These each cost real debugging to get right.
    sampled — otherwise a singularity there gets its marker only by luck. Plus a
    local blow-up hunt for singularities between lattice points, clustered so one
    singularity reports once.
+4b. **A singularity is decided by divergence under refinement, never by comparing
+   a magnitude to the window.** The first version marked anything above 60× the
+   window median, which conflates *large* with *undefined*: `(e^x, 2)` drew
+   275–486 phantom markers and burned ~35,000 field evaluations a frame hunting
+   them. A pole is the thing whose peak keeps growing as the search box halves;
+   every smooth field's peak plateaus, however big it is. Measured margin: poles
+   grow ≥ 1024×, `(e^(3x), 2)` peaking at 3.9e17 grows 1.00×. Two supporting
+   details are load-bearing — the candidate filter is "local maximum among the
+   eight lattice neighbours" with **ties allowed** (a strict test misses a pole
+   equidistant from four samples, and ties cost nothing since the magnitudes are
+   already in hand), and the climb must **not** bail out early on a round that
+   finds no improvement, which aborted the search before the box was fine enough
+   to reach a pole near a lattice point — 4 misses out of 12 with it in.
+4c. **Non-finite has two causes and they draw differently.** An open circle means
+   undefined; an open **square** means the field is defined but its magnitude left
+   double range, which `(e^x, 2)` does past x ≈ 709. `classifyNonFinite` in the
+   engine decides, and the canvas, the point row and the screen-reader label all
+   read from it so they cannot contradict each other.
+4d. **Persistence is debounced, and that is a crash fix.** The view lives in the
+   document, so an immediate save called `history.replaceState` on every wheel
+   tick; WebKit throws `SecurityError` past ~100 calls per 30 seconds, and with no
+   error boundary the throw unmounted the app mid-zoom. Measured after: 300 wheel
+   events produce 16 calls, not 300. The `try/catch` in `saveState` is the
+   backstop that makes a throttled write survivable regardless.
 5. **Keyboard nudges are relative, pointer drags absolute.** Computing an
    absolute position from a handle reads a value that may be a render stale, so
    fast presses (key repeat) clobber instead of composing.
@@ -122,7 +146,14 @@ Checked in-browser, not just typechecked:
 - Tour step 2 quotes the *actual* field; spotlight lands on the real element.
 - A curve reports `length`, and the whole scene round-trips the `#f1=` hash — a
   hash from another format version shows the starter scene and says so.
-- 123 engine tests pass; Warp and landing build unaffected.
+- `(e^x, 2)` over x ∈ [0.5, 15.5] draws **no** markers at all (it drew ~300).
+- The same field panned to x ≈ 712 draws open **squares**, with the boundary
+  landing exactly where `Math.exp` overflows, and arrows intact to its left.
+- `1/(x − 2.31)` marks its pole line with circles between the x = 2 and x = 2.5
+  lattice columns, arrows reversing across it.
+- `(−y, x)/(x²+y²)` still marks the origin with one circle and no smear.
+- 300 synthetic wheel events: 16 `replaceState` calls, no throw, still mounted.
+- 125 engine tests pass; Warp and landing build unaffected.
 
 ## Open items
 
