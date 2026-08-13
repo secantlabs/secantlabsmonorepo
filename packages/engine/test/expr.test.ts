@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   constMat2,
+  constScalar,
   constVec2,
   evaluate,
   ExprError,
@@ -10,6 +11,7 @@ import {
   parse,
   parseBinding,
   type Env,
+  type PMat2,
   type Value,
 } from "../src/expr";
 import { isConst, constValue } from "../src/poly";
@@ -94,5 +96,48 @@ describe("symbolic identities (the calculus safety net)", () => {
 
   it("divergence of a linear radial field is its trace: dot(del, (3x, 5y)) = 8", () => {
     expect(constOf("dot(del, (3x, 5y))")).toBe(8);
+  });
+});
+
+describe("diag", () => {
+  const env: Env = new Map([
+    ["a", constScalar(2.5)],
+    ["b", constScalar(0.4)],
+    ["M", constMat2([1, 2, 3, 4])],
+  ]);
+  const val = (src: string) => evaluate(parse(src), env);
+  const entries = (src: string) => numMat2((val(src) as { value: PMat2 }).value);
+
+  it("puts its arguments on the diagonal and zeros elsewhere", () => {
+    expect(entries("diag(3, 1)")).toEqual([3, 0, 0, 1]);
+    expect(entries("diag(-1, 0)")).toEqual([-1, 0, 0, 0]);
+  });
+
+  it("reads slider values, so a stretch can be driven live", () => {
+    // This is what the SVD lesson's panels do: S = diag(s1, s2) with the two
+    // stretches on sliders. Matrix cells can't reference other rows, so this
+    // is the only way a slider can drive a stretch.
+    expect(entries("diag(a, b)")).toEqual([2.5, 0, 0, 0.4]);
+  });
+
+  it("builds a 3x3 from three arguments", () => {
+    const v = val("diag(a, b, 2)");
+    expect(v.kind).toBe("matrix3");
+  });
+
+  it("rejects any argument count other than 2 or 3", () => {
+    for (const src of ["diag(1)", "diag()", "diag(1, 2, 3, 4)"]) {
+      expect(() => val(src)).toThrow(ExprError);
+      expect(() => val(src)).toThrow(/diag expects 2 or 3 arguments/);
+    }
+  });
+
+  it("leaves the other builtins' arity messages alone", () => {
+    expect(() => val("det(1, 2)")).toThrow(/det expects 1 argument\b/);
+    expect(() => val("circle(1)")).toThrow(/circle expects 0 arguments/);
+  });
+
+  it("refuses non-numbers on the diagonal", () => {
+    expect(() => val("diag(M, 2)")).toThrow(/diag expects numbers/);
   });
 });

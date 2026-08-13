@@ -71,6 +71,8 @@ const FUNCTIONS: { label: string; insert: string; only?: Mode }[] = [
   { label: "svd( )", insert: "svd()" },
   { label: "inv( )", insert: "inv()" },
   { label: "transpose( )", insert: "transpose()" },
+  { label: "diag( , ) — a stretch along the axes", insert: "diag(, )", only: "2d" },
+  { label: "diag( , , ) — a stretch along the axes", insert: "diag(, , )", only: "3d" },
   { label: "circle( ) — the unit circle", insert: "circle()", only: "2d" },
   { label: "sphere( ) — the unit sphere", insert: "sphere()", only: "3d" },
   { label: "dot( , )", insert: "dot(, )" },

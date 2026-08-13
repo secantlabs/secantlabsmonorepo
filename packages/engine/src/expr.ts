@@ -178,22 +178,40 @@ function tokenize(src: string): Tok[] {
 // AST + parser (recursive descent)
 // ---------------------------------------------------------------------------
 
-/** Built-in functions and how many arguments each takes. */
+/**
+ * Built-in functions and the argument counts each accepts. Most take a fixed
+ * number; `diag` takes 2 in the plane and 3 in space.
+ */
 const FN_ARITY = {
-  det: 1,
-  eigen: 1,
-  svd: 1,
-  inv: 1,
-  transpose: 1,
-  norm: 1,
-  dot: 2,
-  cross: 2,
-  proj: 2,
+  det: [1],
+  eigen: [1],
+  svd: [1],
+  inv: [1],
+  transpose: [1],
+  norm: [1],
+  dot: [2],
+  cross: [2],
+  proj: [2],
   // Shape primitives: they take nothing and draw the unit circle / sphere,
   // which the active matrix then carries onto an ellipse / ellipsoid.
-  circle: 0,
-  sphere: 0,
+  circle: [0],
+  sphere: [0],
+  // A stretch along the axes and nothing else. Worth having as a builtin
+  // rather than four editable cells: it can be driven by sliders (matrix cells
+  // can't reference other rows), and it cannot accidentally stop being
+  // diagonal, so "this is a pure stretch" stays true while the reader plays.
+  diag: [2, 3],
 } as const;
+
+/** "det expects 1 argument", "diag expects 2 or 3 arguments". */
+function arityError(fn: string, want: readonly number[]): ExprError {
+  const list =
+    want.length === 1
+      ? String(want[0])
+      : want.slice(0, -1).join(", ") + " or " + want[want.length - 1];
+  const plural = want.length === 1 && want[0] === 1 ? "argument" : "arguments";
+  return new ExprError(`${fn} expects ${list} ${plural}`);
+}
 export type FnName = keyof typeof FN_ARITY;
 
 export type Node =
@@ -302,11 +320,8 @@ class Parser {
           }
         }
         if (this.next()?.t !== "rp") throw new ExprError("Missing )");
-        const want = FN_ARITY[fn];
-        if (args.length !== want)
-          throw new ExprError(
-            `${fn} expects ${want} argument${want === 1 ? "" : "s"}`,
-          );
+        const want = FN_ARITY[fn] as readonly number[];
+        if (!want.includes(args.length)) throw arityError(fn, want);
         return { t: "call", fn, args };
       }
       return { t: "var", name: tok.v };
@@ -697,6 +712,17 @@ export function evaluate(node: Node, env: Env): Value {
             });
           }
           throw new ExprError("proj expects two vectors of the same dimension");
+        }
+        case "diag": {
+          // A stretch along the axes: the arguments go down the diagonal and
+          // everything else is zero. Symbolic arguments flow through, so a
+          // slider-driven diag(a, b) updates live like any other expression.
+          if (args.some((a) => a.kind !== "scalar"))
+            throw new ExprError("diag expects numbers");
+          const d = args.map((a) => (a as Extract<Value, { kind: "scalar" }>).value);
+          const z = P.constant(0);
+          if (d.length === 2) return matrix([d[0], z, z, d[1]]);
+          return matrix3([d[0], z, z, z, d[1], z, z, z, d[2]]);
         }
         case "eigen":
           // eigen doesn't produce a scalar/vector/matrix, so it can't take
